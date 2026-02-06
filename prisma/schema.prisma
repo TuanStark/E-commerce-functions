@@ -1,0 +1,189 @@
+// schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql" // hoặc "mysql"
+  url      = env("DATABASE_URL")
+}
+
+////////////////////
+/// ENUMS
+////////////////////
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum ProductType {
+  DIGITAL
+  PHYSICAL
+  POD
+}
+
+enum ProductStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum AssetType {
+  IMAGE
+  FILE
+  LINK
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  CANCEL
+}
+
+enum PaymentMethod {
+  MOMO
+  BANK
+  PAYPAL
+}
+
+enum PaymentStatus {
+  SUCCESS
+  FAIL
+}
+
+////////////////////
+/// MODELS
+////////////////////
+
+model User {
+  id       String   @id @default(uuid())
+  name     String
+  email    String   @unique
+  password String
+  role     UserRole @default(USER)
+
+  orders    Order[]
+  downloads Download[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Product {
+  id          String        @id @default(uuid())
+  name        String
+  slug        String        @unique
+  description String?
+  price       Float
+  productType ProductType
+  status      ProductStatus @default(DRAFT)
+
+  assets     ProductAsset[]
+  attributes ProductAttribute[]
+  categories ProductCategory[]
+  orderItems OrderItem[]
+  downloads  Download[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ProductAsset {
+  id        String    @id @default(uuid())
+  productId String
+  type      AssetType
+  url       String
+  isPrimary Boolean   @default(false)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
+model ProductAttribute {
+  id        String @id @default(uuid())
+  productId String
+  name      String // format, license, size, etc
+  value     String // PDF, Personal, XL
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model Category {
+  id       String  @id @default(uuid())
+  name     String
+  slug     String  @unique
+  parentId String?
+
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
+
+  products ProductCategory[]
+
+  createdAt DateTime @default(now())
+}
+
+model ProductCategory {
+  productId  String
+  categoryId String
+
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([productId, categoryId])
+}
+
+model Order {
+  id          String      @id @default(uuid())
+  userId      String
+  totalAmount Float
+  status      OrderStatus @default(PENDING)
+
+  user     User        @relation(fields: [userId], references: [id])
+  items    OrderItem[]
+  payment  Payment?
+  download Download[]
+
+  createdAt DateTime @default(now())
+}
+
+model OrderItem {
+  id        String @id @default(uuid())
+  orderId   String
+  productId String
+  price     Float
+  quantity  Int    @default(1)
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+}
+
+model Payment {
+  id            String        @id @default(uuid())
+  orderId       String        @unique
+  method        PaymentMethod
+  status        PaymentStatus
+  transactionId String?
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
+model Download {
+  id            String @id @default(uuid())
+  userId        String
+  productId     String
+  orderId       String
+  downloadLimit Int    @default(5)
+  downloadCount Int    @default(0)
+
+  user    User    @relation(fields: [userId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+  order   Order   @relation(fields: [orderId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId, orderId])
+}
